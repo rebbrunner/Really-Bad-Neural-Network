@@ -1,15 +1,18 @@
 import numpy as np
-from ast import literal_eval
+from collections import Counter
+
+# Simple NN from James Loy's "Neural Networks with Python text"
+
+PUNCTUATION =','
+
+tokenize = lambda x: [word.strip(PUNCTUATION) for word in x.split(' ')]
+classification_map = {'up': 0, 'same': 1, 'down': 2}
 
 def sigmoid(x):
     return 1.0 / (1 + np.exp(-x))
 
 def sigmoid_derivative(x):
     return x * (1.0 - x)
-
-def loss_fn(actual, predicted):
-    squared_diff = (actual - predicted)**2
-    return squared_diff.mean()
 
 def dloss_fn(actual, predicted):
     return 2 * (actual - predicted)
@@ -18,7 +21,7 @@ class NN:
     def __init__(self, x, y):
         self.input = x
 
-        self.w1 = np.random.rand(self.input.shape[1], 4)
+        self.w1 = np.random.rand(self.input.shape[len(self.input.shape)-1], 4)
         self.w2 = np.random.rand(4, 1)
 
         self.y = y
@@ -38,46 +41,55 @@ class NN:
         self.w1 += dw1
         self.w2 += dw2
 
-def train():
-    x = np.array([[0,0,1],
-                  [0,1,1],
-                  [1,0,1],
-                  [1,1,1]])
-    y = np.array([[0],[1],[1],[0]])
-    nn = NN(x,y)
+def gen_dict(fname):
+    with open(fname) as f:
+        lines = f.read().splitlines()
+    x = [line.split('|')[0] for line in lines]
+    y = [line.split('|')[1] for line in lines]
+    unique_words = list(Counter([w for w in x for w in tokenize(w)]).keys())
+    word2vec = {word: i for (i, word) in enumerate(unique_words)}
+    return x, y, word2vec
 
-    for i in range(1500):
+def preprocess(fname):
+    x, y, word2vec = gen_dict(fname)
+    temp = []
+    for sent in x:
+        words = tokenize(sent)
+        t = [0]*len(word2vec)
+        for word in words:
+            i = word2vec[word]
+            t[i] = 1
+        temp.append(t)
+    x = np.array(temp)
+    y = np.array([[classification_map[word]*.1] for word in y])
+    return x, y
+
+def train(fname):
+    x, y = preprocess(fname)
+
+    print(x)
+    print(y)
+    
+    nn = NN(x, y)
+    for _ in range(1500):
         nn.feed_forward()
         nn.back_prop()
     
-    print(nn.output)
-
-def save(nn, fname):
-    o = open(fname, 'w+')
-    for col in nn.w1:
-        o.write((','.join(str(list(col)).split(','))) + '\n')
-    o.write('--\n')
-    for col in nn.w2:
-        o.write((','.join(str(list(col)).split(','))) + '\n')
-    o.close()
-
-def load(fname):
-    with open(fname) as f:
-        lines = f.read()
-    w1, w2 = lines.split('--')
-    interpret = lambda x: literal_eval('['+ ','.join(x.splitlines()).strip(',') + ']')
-    w1 = np.array(interpret(w1))
-    w2 = np.array(interpret(w2))
-    nn = NN(np.array([[0,0,0]]), np.array([[0]]))
-    nn.w1 = w1
-    nn.w2 = w2
     return nn
 
-def predict(nn, x):
-    nn.input = x
+if __name__ == '__main__':
+    nn = train('../data/diet.txt')
+    i = 'egg, cheese'
+    words = tokenize(i)
+    _, _, word2vec = gen_dict('../data/diet.txt')
+    t = [0]*len(word2vec)
+    for word in words:
+        i = word2vec[word]
+        t[i] = 1
+    nn.input = t
     nn.feed_forward()
     print(nn.output)
-
-if __name__ == '__main__':
-    nn = load('pickle.txt')
-    predict(nn, np.array([[1,0,1]]))
+    res = int(round(nn.output[0],1)/.1)
+    classification_map = {'up': 0, 'same': 1, 'down': 2}
+    translated_map = dict((v,k) for k,v in classification_map.items())
+    print(translated_map[res])

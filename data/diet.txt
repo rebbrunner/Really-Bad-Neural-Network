@@ -1,0 +1,3 @@
+bagel, bread|up
+bagel, egg|same
+egg, cheese|down
